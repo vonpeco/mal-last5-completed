@@ -11,6 +11,7 @@ from PIL import Image
 USERNAME = "VonPeco"
 CLIENT_ID = os.environ["MAL_CLIENT_ID"]
 SITE = "https://vonpeco.github.io/mal-last5-completed"
+API_URL = f"https://api.myanimelist.net/v2/users/{USERNAME}/animelist"
 POSTER_H = 110
 BG = (35, 40, 49)
 DOCS = Path("docs")
