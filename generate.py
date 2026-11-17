@@ -1,19 +1,19 @@
+import html
 import os
 from io import BytesIO
 from pathlib import Path
 
 import requests
-from PIL import Image, ImageDraw
+from PIL import Image
 
 USERNAME = "VonPeco"
 CLIENT_ID = os.environ["MAL_CLIENT_ID"]
+SITE = "https://vonpeco.github.io/mal-last5-completed"
 API_URL = f"https://api.myanimelist.net/v2/users/{USERNAME}/animelist"
 POSTER_W, POSTER_H = 240, 340
-GAP, MARGIN = 18, 18
-BG = (17, 19, 24)
+BG = (35, 40, 49)
 FRAME = (48, 53, 63)
-PLACEHOLDER = (35, 40, 49)
-OUT = Path("docs/covers.png")
+DOCS = Path("docs")
 
 
 def get_entries():
@@ -29,7 +29,12 @@ def get_entries():
         timeout=30,
     )
     response.raise_for_status()
-    return response.json().get("data", [])[:5]
+    entries = response.json().get("data", [])[:5]
+    for entry in entries:
+        node = entry.get("node", {})
+        if not isinstance(node.get("id"), int):
+            raise ValueError(f"MyAnimeList no devolvió un ID válido para: {node.get('title', 'anime')}")
+    return entries
 
 
 def get_cover(node):
@@ -37,49 +42,117 @@ def get_cover(node):
     url = picture.get("large") or picture.get("medium")
     if not url:
         return None
-    response = requests.get(url, timeout=30, headers={"User-Agent": "MAL-Last5-Profile/1.0"})
+
+    response = requests.get(
+        url,
+        timeout=30,
+        headers={"User-Agent": "MAL-Last5-Profile/1.0"},
+    )
     response.raise_for_status()
     image = Image.open(BytesIO(response.content)).convert("RGB")
     image.thumbnail((POSTER_W, POSTER_H), Image.Resampling.LANCZOS)
-    canvas = Image.new("RGB", (POSTER_W, POSTER_H), PLACEHOLDER)
+
+    canvas = Image.new("RGB", (POSTER_W, POSTER_H), BG)
     x = (POSTER_W - image.width) // 2
     y = (POSTER_H - image.height) // 2
     canvas.paste(image, (x, y))
     return canvas
 
 
+def write_redirect(slot, anime_id, title):
+    destination = (
+        f"https://myanimelist.net/anime/{anime_id}"
+        if anime_id is not None
+        else f"https://myanimelist.net/profile/{USERNAME}"
+    )
+    safe_destination = html.escape(destination, quote=True)
+    safe_title = html.escape(title or "MyAnimeList", quote=True)
+    page = f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="refresh" content="0;url={safe_destination}">
+  <link rel="canonical" href="{safe_destination}">
+  <title>Opening {safe_title}</title>
+  <script>window.location.replace("{destination}");</script>
+</head>
+<body>
+  <p>Opening <a href="{safe_destination}">{safe_title}</a> on MyAnimeList…</p>
+</body>
+</html>
+"""
+    redirect_dir = DOCS / "go" / str(slot)
+    redirect_dir.mkdir(parents=True, exist_ok=True)
+    (redirect_dir / "index.html").write_text(page, encoding="utf-8")
+
+
+def make_bbcode():
+    def linked_cover(slot):
+        image_url = f"{SITE}/covers/anime-{slot}.png"
+        click_url = f"{SITE}/go/{slot}/"
+        return f"[url={click_url}][img]{image_url}[/img][/url]"
+
+    row_one = " ".join(linked_cover(i) for i in range(1, 4))
+    row_two = " ".join(linked_cover(i) for i in range(4, 6))
+    return (
+        "[center]\n"
+        + row_one
+        + "\n[/center]\n"
+        + "[center]\n"
+        + row_two
+        + "\n[/center]"
+    )
+
+
 def main():
     entries = get_entries()
-    width = MARGIN * 2 + POSTER_W * 3 + GAP * 2
-    height = MARGIN * 2 + POSTER_H * 2 + GAP
-    canvas = Image.new("RGB", (width, height), BG)
+    cover_dir = DOCS / "covers"
+    cover_dir.mkdir(parents=True, exist_ok=True)
 
-    positions = [
-        (MARGIN, MARGIN),
-        (MARGIN + POSTER_W + GAP, MARGIN),
-        (MARGIN + (POSTER_W + GAP) * 2, MARGIN),
-        ((width - (POSTER_W * 2 + GAP)) // 2, MARGIN + POSTER_H + GAP),
-        ((width - (POSTER_W * 2 + GAP)) // 2 + POSTER_W + GAP, MARGIN + POSTER_H + GAP),
-    ]
+    for slot in range(1, 6):
+        anime_id = None
+        title = "Sin anime"
+        cover = Image.new("RGB", (POSTER_W, POSTER_H), BG)
 
-    for index in range(5):
-        x, y = positions[index]
-        cover = None
-        if index < len(entries):
-            node = entries[index].get("node", {})
+        if slot <= len(entries):
+            node = entries[slot - 1].get("node", {})
+            anime_id = node["id"]
+            title = node.get("title") or f"Anime {anime_id}"
             try:
-                cover = get_cover(node)
+                downloaded = get_cover(node)
+                if downloaded is not None:
+                    cover = downloaded
             except Exception as exc:
-                print(f"Could not download cover for {node.get('title', 'unknown')}: {exc}")
-        if cover is None:
-            cover = Image.new("RGB", (POSTER_W, POSTER_H), PLACEHOLDER)
-        canvas.paste(cover, (x, y))
-        draw = ImageDraw.Draw(canvas)
-        draw.rectangle((x - 1, y - 1, x + POSTER_W, y + POSTER_H), outline=FRAME, width=2)
+                raise RuntimeError(f"No se pudo descargar la portada de {title}: {exc}") from exc
 
-    OUT.parent.mkdir(parents=True, exist_ok=True)
-    canvas.save(OUT, format="PNG", optimize=True)
-    print(f"Created {OUT} with {len(entries)} completed anime entries.")
+        image_path = cover_dir / f"anime-{slot}.png"
+        cover.save(image_path, format="PNG", optimize=True)
+        write_redirect(slot, anime_id, title)
+        print(f"Slot {slot}: {title} -> {anime_id if anime_id else 'sin destino'}")
+
+    bbcode = make_bbcode()
+    (DOCS / "profile-bbcode.txt").write_text(bbcode + "\n", encoding="utf-8")
+    (DOCS / "index.html").write_text(
+        """<!doctype html>
+<html lang="es">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VonPeco - últimos 5 animes completados</title></head>
+<body style="font-family:Arial,sans-serif;max-width:900px;margin:30px auto;padding:0 16px">
+<h1>Últimos 5 animes completados de VonPeco</h1>
+<p>Cada portada abre el anime correspondiente en MyAnimeList.</p>
+<div style="display:flex;justify-content:center;gap:14px;flex-wrap:wrap">
+""" + "".join(
+            f'<a href="go/{i}/"><img src="covers/anime-{i}.png" width="{POSTER_W}" height="{POSTER_H}" alt="Anime {i}"></a>'
+            for i in range(1, 6)
+        ) + """
+</div>
+<p><a href="profile-bbcode.txt">Ver el BBCode para pegar en el perfil clásico</a></p>
+</body></html>
+""",
+        encoding="utf-8",
+    )
+    print(f"Created 5 individual covers and redirect links from {len(entries)} completed anime entries.")
 
 
 if __name__ == "__main__":
