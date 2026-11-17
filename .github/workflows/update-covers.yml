@@ -1,6 +1,8 @@
-name: Update MAL cover image
+name: Update MAL cover images
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
   schedule:
     - cron: "17 */6 * * *"
