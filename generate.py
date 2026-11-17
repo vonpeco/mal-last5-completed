@@ -53,24 +53,24 @@ def get_cover(node):
     )
     response.raise_for_status()
     image = Image.open(BytesIO(response.content)).convert("RGB")
-    # Match CSS object-fit: cover: fill the 240x110 frame and crop overflow.
-    image = ImageOps.fit(
-        image,
-        (POSTER_W, POSTER_H),
-        method=Image.Resampling.LANCZOS,
-        centering=(0.5, 0.5),
-    ).convert("RGBA")
+    # Fit the complete cover inside the 240x110 frame without cropping
+    # or distorting its original aspect ratio (equivalent to object-fit: contain).
+    image.thumbnail((POSTER_W, POSTER_H), Image.Resampling.LANCZOS)
+    image = image.convert("RGBA")
+    frame = Image.new("RGBA", (POSTER_W, POSTER_H), BG + (255,))
+    x = (POSTER_W - image.width) // 2
+    y = (POSTER_H - image.height) // 2
+    frame.alpha_composite(image, (x, y))
 
-    # Bake the 4px border radius into the PNG because MAL profile BBCode
-    # does not let us attach the profile's CSS rules to each image.
+    # Round the outer frame corners; the full original cover remains visible.
     alpha = Image.new("L", (POSTER_W, POSTER_H), 0)
     ImageDraw.Draw(alpha).rounded_rectangle(
         (0, 0, POSTER_W - 1, POSTER_H - 1),
         radius=CORNER_RADIUS,
         fill=255,
     )
-    image.putalpha(alpha)
-    return image
+    frame.putalpha(alpha)
+    return frame
 
 
 def get_anime_url(node):
