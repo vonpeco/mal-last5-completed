@@ -39,7 +39,7 @@ def get_entries():
     return entries
 
 
-def get_cover(node):
+ddef get_cover(node):
     picture = node.get("main_picture") or {}
     url = picture.get("large") or picture.get("medium")
     if not url:
@@ -51,12 +51,19 @@ def get_cover(node):
         headers={"User-Agent": "MAL-Last5-Profile/1.0"},
     )
     response.raise_for_status()
+
     image = Image.open(BytesIO(response.content)).convert("RGB")
 
-    # Set only the height to 110px. Let the width follow the original
-    # aspect ratio, with no fixed frame, cropping, or distortion.
-    width = max(1, round(image.width * POSTER_H / image.height))
-    return image.resize((width, POSTER_H), Image.Resampling.LANCZOS)
+    # Resize proportionally to fit inside a 72x112 canvas.
+    image.thumbnail((POSTER_W, POSTER_H), Image.Resampling.LANCZOS)
+
+    # Center the image on a fixed 72x112 canvas.
+    canvas = Image.new("RGB", (POSTER_W, POSTER_H), BG)
+    x = (POSTER_W - image.width) // 2
+    y = (POSTER_H - image.height) // 2
+    canvas.paste(image, (x, y))
+
+    return canvas
 
 
 def get_anime_url(node):
