@@ -6,7 +6,7 @@ from pathlib import Path
 from urllib.parse import quote
 
 import requests
-from PIL import Image
+from PIL import Image, ImageDraw
 
 USERNAME = "VonPeco"
 CLIENT_ID = os.environ["MAL_CLIENT_ID"]
@@ -39,6 +39,17 @@ def get_entries():
     return entries
 
 
+def add_cover_frame(image):
+    draw = ImageDraw.Draw(image)
+    draw.rounded_rectangle(
+        (0, 0, POSTER_W - 1, POSTER_H - 1),
+        radius=4,
+        outline=(190, 190, 190),
+        width=1,
+    )
+    return image
+
+
 def get_cover(node):
     picture = node.get("main_picture") or {}
     url = picture.get("large") or picture.get("medium")
@@ -63,7 +74,7 @@ def get_cover(node):
     y = (POSTER_H - image.height) // 2
     canvas.paste(image, (x, y))
 
-    return canvas
+    return add_cover_frame(canvas)
 
 
 def get_anime_url(node):
@@ -130,7 +141,7 @@ def main():
     for slot in range(1, 6):
         destination = f"https://myanimelist.net/profile/{USERNAME}"
         title = "Sin anime"
-        cover = Image.new("RGB", (POSTER_W, POSTER_H), BG)
+        cover = add_cover_frame(Image.new("RGB", (POSTER_W, POSTER_H), BG))
 
         if slot <= len(entries):
             node = entries[slot - 1].get("node", {})
@@ -176,8 +187,6 @@ body {
     padding: 0;
     margin: 0 auto;
     list-style: none;
-    border: 1px solid #bebebe;
-    border-radius: 4px;
     box-sizing: border-box;
     overflow: visible;
 }
@@ -186,6 +195,8 @@ body {
     width: 72px;
     height: 112px;
     box-sizing: border-box;
+    border-radius: 4px;
+    overflow: hidden;
 }
 
 .anime-list li:nth-child(n+4) {
