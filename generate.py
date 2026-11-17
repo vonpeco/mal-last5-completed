@@ -6,13 +6,14 @@ from pathlib import Path
 from urllib.parse import quote
 
 import requests
-from PIL import Image
+from PIL import Image, ImageDraw, ImageOps
 
 USERNAME = "VonPeco"
 CLIENT_ID = os.environ["MAL_CLIENT_ID"]
 SITE = "https://vonpeco.github.io/mal-last5-completed"
 API_URL = f"https://api.myanimelist.net/v2/users/{USERNAME}/animelist"
-POSTER_W, POSTER_H = 240, 340
+POSTER_W, POSTER_H = 240, 110
+CORNER_RADIUS = 4
 BG = (35, 40, 49)
 FRAME = (48, 53, 63)
 DOCS = Path("docs")
@@ -52,13 +53,24 @@ def get_cover(node):
     )
     response.raise_for_status()
     image = Image.open(BytesIO(response.content)).convert("RGB")
-    image.thumbnail((POSTER_W, POSTER_H), Image.Resampling.LANCZOS)
+    # Match CSS object-fit: cover: fill the 240x110 frame and crop overflow.
+    image = ImageOps.fit(
+        image,
+        (POSTER_W, POSTER_H),
+        method=Image.Resampling.LANCZOS,
+        centering=(0.5, 0.5),
+    ).convert("RGBA")
 
-    canvas = Image.new("RGB", (POSTER_W, POSTER_H), BG)
-    x = (POSTER_W - image.width) // 2
-    y = (POSTER_H - image.height) // 2
-    canvas.paste(image, (x, y))
-    return canvas
+    # Bake the 4px border radius into the PNG because MAL profile BBCode
+    # does not let us attach the profile's CSS rules to each image.
+    alpha = Image.new("L", (POSTER_W, POSTER_H), 0)
+    ImageDraw.Draw(alpha).rounded_rectangle(
+        (0, 0, POSTER_W - 1, POSTER_H - 1),
+        radius=CORNER_RADIUS,
+        fill=255,
+    )
+    image.putalpha(alpha)
+    return image
 
 
 def get_anime_url(node):
@@ -124,7 +136,7 @@ def main():
     for slot in range(1, 6):
         destination = f"https://myanimelist.net/profile/{USERNAME}"
         title = "Sin anime"
-        cover = Image.new("RGB", (POSTER_W, POSTER_H), BG)
+        cover = Image.new("RGBA", (POSTER_W, POSTER_H), BG + (255,))
 
         if slot <= len(entries):
             node = entries[slot - 1].get("node", {})
