@@ -1,5 +1,7 @@
 import html
 import os
+import re
+import time
 from io import BytesIO
 from pathlib import Path
 
@@ -59,12 +61,37 @@ def get_cover(node):
     return canvas
 
 
-def write_redirect(slot, anime_id, title):
-    destination = (
-        f"https://myanimelist.net/anime/{anime_id}"
-        if anime_id is not None
-        else f"https://myanimelist.net/profile/{USERNAME}"
-    )
+def get_anime_url(node):
+    anime_id = node["id"]
+    title = node.get("title") or f"Anime {anime_id}"
+
+    # Jikan returns MAL's canonical detail URL, including the official title slug.
+    # It is an unofficial read-only API; requests are spaced below its 3 req/sec limit.
+    try:
+        time.sleep(0.4)
+        response = requests.get(
+            f"https://api.jikan.moe/v4/anime/{anime_id}",
+            timeout=25,
+            headers={"User-Agent": "MAL-Last5-Profile/1.0"},
+        )
+        response.raise_for_status()
+        canonical_url = response.json().get("data", {}).get("url")
+        expected_prefix = f"https://myanimelist.net/anime/{anime_id}/"
+        if isinstance(canonical_url, str) and canonical_url.startswith(expected_prefix):
+            return canonical_url
+        print(f"Jikan did not return a canonical title URL for {anime_id}; using title fallback.")
+    except Exception as exc:
+        print(f"Could not retrieve canonical MAL URL for {anime_id}: {exc}; using title fallback.")
+
+    # Fallback keeps both the MAL ID and a readable title slug in the destination.
+    slug = title.replace(":", "_")
+    slug = re.sub(r"[!?¡¿]+", "", slug)
+    slug = re.sub(r"[^\\w\\s-]", "", slug, flags=re.UNICODE)
+    slug = re.sub(r"\\s+", "_", slug.strip())
+    return f"https://myanimelist.net/anime/{anime_id}/{slug}"
+
+
+def write_redirect(slot, destination, title):
     safe_destination = html.escape(destination, quote=True)
     safe_title = html.escape(title or "MyAnimeList", quote=True)
     page = f"""<!doctype html>
@@ -111,7 +138,7 @@ def main():
     cover_dir.mkdir(parents=True, exist_ok=True)
 
     for slot in range(1, 6):
-        anime_id = None
+        destination = f"https://myanimelist.net/profile/{USERNAME}"
         title = "Sin anime"
         cover = Image.new("RGB", (POSTER_W, POSTER_H), BG)
 
@@ -119,6 +146,7 @@ def main():
             node = entries[slot - 1].get("node", {})
             anime_id = node["id"]
             title = node.get("title") or f"Anime {anime_id}"
+            destination = get_anime_url(node)
             try:
                 downloaded = get_cover(node)
                 if downloaded is not None:
@@ -128,8 +156,8 @@ def main():
 
         image_path = cover_dir / f"anime-{slot}.png"
         cover.save(image_path, format="PNG", optimize=True)
-        write_redirect(slot, anime_id, title)
-        print(f"Slot {slot}: {title} -> {anime_id if anime_id else 'sin destino'}")
+        write_redirect(slot, destination, title)
+        print(f"Slot {slot}: {title} -> {destination}")
 
     bbcode = make_bbcode()
     (DOCS / "profile-bbcode.txt").write_text(bbcode + "\n", encoding="utf-8")
