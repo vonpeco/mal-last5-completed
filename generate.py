@@ -1,9 +1,9 @@
 import html
 import os
 import re
-import time
 from io import BytesIO
 from pathlib import Path
+from urllib.parse import quote
 
 import requests
 from PIL import Image
@@ -65,31 +65,15 @@ def get_anime_url(node):
     anime_id = node["id"]
     title = node.get("title") or f"Anime {anime_id}"
 
-    # Jikan returns MAL's canonical detail URL, including the official title slug.
-    # It is an unofficial read-only API; requests are spaced below its 3 req/sec limit.
-    try:
-        time.sleep(0.4)
-        response = requests.get(
-            f"https://api.jikan.moe/v4/anime/{anime_id}",
-            timeout=(5, 8),
-            headers={"User-Agent": "MAL-Last5-Profile/1.0"},
-        )
-        response.raise_for_status()
-        canonical_url = response.json().get("data", {}).get("url")
-        expected_prefix = f"https://myanimelist.net/anime/{anime_id}/"
-        if isinstance(canonical_url, str) and canonical_url.startswith(expected_prefix):
-            return canonical_url
-        print(f"Jikan did not return a canonical title URL for {anime_id}; using title fallback.")
-    except Exception as exc:
-        print(f"Could not retrieve canonical MAL URL for {anime_id}: {exc}; using title fallback.")
-
-    # Fallback keeps both the MAL ID and a readable title slug in the destination.
+    # Build the title part of MAL's detail URL from the exact title returned by MAL.
+    # Spaces become underscores; punctuation such as ":" becomes an underscore,
+    # while exclamation marks are removed, matching the example URL format.
     slug = title.replace(":", "_")
     slug = re.sub(r"[!?¡¿]+", "", slug)
     slug = re.sub(r"[^\w\s-]", "", slug, flags=re.UNICODE)
-    slug = re.sub(r"\\s+", "_", slug.strip())
+    slug = re.sub(r"\s+", "_", slug.strip())
+    slug = quote(slug, safe="_-")
     return f"https://myanimelist.net/anime/{anime_id}/{slug}"
-
 
 def write_redirect(slot, destination, title):
     safe_destination = html.escape(destination, quote=True)
