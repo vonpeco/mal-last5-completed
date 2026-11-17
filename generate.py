@@ -6,7 +6,7 @@ from pathlib import Path
 from urllib.parse import quote
 
 import requests
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageOps
 
 USERNAME = "VonPeco"
 CLIENT_ID = os.environ["MAL_CLIENT_ID"]
@@ -65,14 +65,13 @@ def get_cover(node):
 
     image = Image.open(BytesIO(response.content)).convert("RGB")
 
-    # Resize proportionally to fit inside a 72x112 canvas.
-    image.thumbnail((POSTER_W, POSTER_H), Image.Resampling.LANCZOS)
-
-    # Center the image on a fixed 72x112 canvas.
-    canvas = Image.new("RGB", (POSTER_W, POSTER_H), BG)
-    x = (POSTER_W - image.width) // 2
-    y = (POSTER_H - image.height) // 2
-    canvas.paste(image, (x, y))
+    # Fill the entire 72x112 poster area, cropping a little if the aspect ratio differs.
+    canvas = ImageOps.fit(
+        image,
+        (POSTER_W, POSTER_H),
+        method=Image.Resampling.LANCZOS,
+        centering=(0.5, 0.5),
+    )
 
     return add_cover_frame(canvas)
 
