@@ -39,7 +39,7 @@ def get_entries():
     return entries
 
 
-ddef get_cover(node):
+def get_cover(node):
     picture = node.get("main_picture") or {}
     url = picture.get("large") or picture.get("medium")
     if not url:
@@ -161,7 +161,7 @@ def main():
 <p>Cada portada abre el anime correspondiente en MyAnimeList.</p>
 <div style="display:flex;justify-content:center;align-items:flex-start;gap:14px;flex-wrap:wrap">
 """ + "".join(
-            f'<a href="go/{i}/"><img src="covers/anime-{i}.png" height="{POSTER_H}" alt="Anime {i}"></a>'
+            f'<a href="go/{i}/"><img src="covers/anime-{i}.png" width="72" height="112" alt="Anime {i}"></a>'
             for i in range(1, 6)
         ) + """
 </div>
