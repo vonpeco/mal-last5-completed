@@ -6,16 +6,13 @@ from pathlib import Path
 from urllib.parse import quote
 
 import requests
-from PIL import Image, ImageDraw, ImageOps
+from PIL import Image
 
 USERNAME = "VonPeco"
 CLIENT_ID = os.environ["MAL_CLIENT_ID"]
 SITE = "https://vonpeco.github.io/mal-last5-completed"
-API_URL = f"https://api.myanimelist.net/v2/users/{USERNAME}/animelist"
-POSTER_W, POSTER_H = 240, 110
-CORNER_RADIUS = 4
+POSTER_H = 110
 BG = (35, 40, 49)
-FRAME = (48, 53, 63)
 DOCS = Path("docs")
 
 
@@ -53,24 +50,11 @@ def get_cover(node):
     )
     response.raise_for_status()
     image = Image.open(BytesIO(response.content)).convert("RGB")
-    # Fit the complete cover inside the 240x110 frame without cropping
-    # or distorting its original aspect ratio (equivalent to object-fit: contain).
-    image.thumbnail((POSTER_W, POSTER_H), Image.Resampling.LANCZOS)
-    image = image.convert("RGBA")
-    frame = Image.new("RGBA", (POSTER_W, POSTER_H), BG + (255,))
-    x = (POSTER_W - image.width) // 2
-    y = (POSTER_H - image.height) // 2
-    frame.alpha_composite(image, (x, y))
 
-    # Round the outer frame corners; the full original cover remains visible.
-    alpha = Image.new("L", (POSTER_W, POSTER_H), 0)
-    ImageDraw.Draw(alpha).rounded_rectangle(
-        (0, 0, POSTER_W - 1, POSTER_H - 1),
-        radius=CORNER_RADIUS,
-        fill=255,
-    )
-    frame.putalpha(alpha)
-    return frame
+    # Set only the height to 110px. Let the width follow the original
+    # aspect ratio, with no fixed frame, cropping, or distortion.
+    width = max(1, round(image.width * POSTER_H / image.height))
+    return image.resize((width, POSTER_H), Image.Resampling.LANCZOS)
 
 
 def get_anime_url(node):
@@ -86,6 +70,7 @@ def get_anime_url(node):
     slug = re.sub(r"\s+", "_", slug.strip())
     slug = quote(slug, safe="_-")
     return f"https://myanimelist.net/anime/{anime_id}/{slug}"
+
 
 def write_redirect(slot, destination, title):
     safe_destination = html.escape(destination, quote=True)
@@ -136,7 +121,7 @@ def main():
     for slot in range(1, 6):
         destination = f"https://myanimelist.net/profile/{USERNAME}"
         title = "Sin anime"
-        cover = Image.new("RGBA", (POSTER_W, POSTER_H), BG + (255,))
+        cover = Image.new("RGB", (POSTER_H, POSTER_H), BG)
 
         if slot <= len(entries):
             node = entries[slot - 1].get("node", {})
@@ -165,9 +150,9 @@ def main():
 <body style="font-family:Arial,sans-serif;max-width:900px;margin:30px auto;padding:0 16px">
 <h1>Últimos 5 animes completados de VonPeco</h1>
 <p>Cada portada abre el anime correspondiente en MyAnimeList.</p>
-<div style="display:flex;justify-content:center;gap:14px;flex-wrap:wrap">
+<div style="display:flex;justify-content:center;align-items:flex-start;gap:14px;flex-wrap:wrap">
 """ + "".join(
-            f'<a href="go/{i}/"><img src="covers/anime-{i}.png" width="{POSTER_W}" height="{POSTER_H}" alt="Anime {i}"></a>'
+            f'<a href="go/{i}/"><img src="covers/anime-{i}.png" height="{POSTER_H}" alt="Anime {i}"></a>'
             for i in range(1, 6)
         ) + """
 </div>
