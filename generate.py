@@ -86,7 +86,7 @@ def get_anime_url(node):
     # Fallback keeps both the MAL ID and a readable title slug in the destination.
     slug = title.replace(":", "_")
     slug = re.sub(r"[!?¡¿]+", "", slug)
-    slug = re.sub(r"[^\\w\\s-]", "", slug, flags=re.UNICODE)
+    slug = re.sub(r"[^\w\s-]", "", slug, flags=re.UNICODE)
     slug = re.sub(r"\\s+", "_", slug.strip())
     return f"https://myanimelist.net/anime/{anime_id}/{slug}"
 
