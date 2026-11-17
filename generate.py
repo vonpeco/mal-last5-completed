@@ -71,7 +71,7 @@ def get_anime_url(node):
         time.sleep(0.4)
         response = requests.get(
             f"https://api.jikan.moe/v4/anime/{anime_id}",
-            timeout=25,
+            timeout=(5, 8),
             headers={"User-Agent": "MAL-Last5-Profile/1.0"},
         )
         response.raise_for_status()
