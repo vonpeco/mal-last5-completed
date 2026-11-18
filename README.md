@@ -1,36 +1,43 @@
-# MAL Last 5 Completed
+# MAL Last 6 Completed
 
-Genera **cinco imágenes PNG independientes** con las portadas de los cinco animes más recientemente actualizados dentro del estado **Completed** de la lista pública de MyAnimeList de `VonPeco`.
+Generates **six separate PNG cover images** for the six most recently updated anime in the **Completed** list of MyAnimeList user \`VonPeco\`. Each cover links to the corresponding anime entry. GitHub Pages publishes the generated images, redirects, BBCode, and preview page.
 
-Cada portada tiene un enlace clickeable que abre la ficha correcta del anime en MAL. Las imágenes y los destinos se actualizan juntos cada seis horas.
+## Classic MAL profile
 
-## Cómo ponerlo en el perfil clásico
+After a successful workflow run, open:
 
-Después de que la acción termine correctamente, abrí:
+\`https://vonpeco.github.io/mal-last5-completed/profile-bbcode.txt\`
 
-`https://vonpeco.github.io/mal-last5-completed/profile-bbcode.txt`
+Copy the complete BBCode into the classic MAL profile editor. It displays three covers per row (two rows). The image and redirect URLs remain stable, so the BBCode only needs to be pasted once.
 
-Copiá el contenido completo y pegalo en el editor de tu perfil clásico de MAL. El bloque mantiene tres portadas en la primera fila y dos centradas debajo. Solo hay que pegarlo una vez: las URLs de imagen y los enlaces intermediarios son estables.
+## Cover design
 
-Cada imagen enlaza a una dirección propia de este sitio (`/go/1/` a `/go/5/`). Esas páginas se regeneran en cada actualización y redirigen al anime que ocupa actualmente esa posición en la lista. Así no quedan enlaces desactualizados cuando cambia el Top 5.
+The default design is 79 × 118 px, background \`#1D1D1D\`, border 1.5 px in \`#F5364F\`, and 5 px rounded corners. The generator accepts these workflow-dispatch inputs:
 
-## Configuración inicial
+- \`poster_width\` (40–300 px)
+- \`poster_height\` (60–450 px)
+- \`background_color\` (hex)
+- \`border_color\` (hex)
+- \`border_width\` (0–10 px)
+- \`border_radius\` (0–30 px)
 
-1. En **Settings → Secrets and variables → Actions**, crear un repository secret llamado `MAL_CLIENT_ID` con el Client ID de la aplicación de MyAnimeList.
-2. En **Settings → Pages**, seleccionar **Build and deployment → Source: GitHub Actions**.
-3. La publicación se ejecuta al actualizar el código, manualmente desde **Actions**, y automáticamente cada seis horas.
+The Peco's MAL Tools Chrome extension includes a visual editor and sends these settings to the Cloudflare Worker, which dispatches the GitHub Actions workflow. The Worker must use the compatible code provided with extension v1.3 (\`CLOUDFLARE-WORKER-UPDATE.js\`). Keep the existing \`GITHUB_TOKEN\` and \`UPDATE_SECRET\` secrets in Cloudflare.
 
-El repositorio debe permanecer público para usar GitHub Pages gratis con GitHub Free. El Client ID queda almacenado como secreto de Actions y no se escribe en los archivos del repositorio.
+## Initial setup
 
-## Orden de las entradas
+1. In **Settings → Secrets and variables → Actions**, create a repository secret named \`MAL_CLIENT_ID\` with the Client ID from the MyAnimeList application.
+2. In **Settings → Pages**, select **Build and deployment → Source: GitHub Actions**.
+3. The workflow runs on pushes to \`main\` and can also be started manually from **Actions**.
 
-La API se consulta con `status=completed` y `sort=list_updated_at`. Por eso el orden sigue la última actualización de cada entrada, que puede no coincidir exactamente con el día en que terminaste de ver el anime.
+The repository must remain public to use GitHub Pages for free with GitHub Free. The MAL Client ID is stored as an Actions secret and is not written into repository files.
 
-## Comprobación
+## Ordering
 
-- Página de vista previa: `https://vonpeco.github.io/mal-last5-completed/`
-- BBCode listo para copiar: `https://vonpeco.github.io/mal-last5-completed/profile-bbcode.txt`
-- Imagen individual: `https://vonpeco.github.io/mal-last5-completed/covers/anime-1.png`
-- Destino dinámico de la primera portada: `https://vonpeco.github.io/mal-last5-completed/go/1/`
+The API request uses \`status=completed\` and \`sort=list_updated_at\`, so ordering follows the most recently updated list entries and may differ from the exact date an anime was completed.
 
-Si una acción falla, abrí **Actions** en GitHub y revisá el paso fallido. Confirmá que el secret se llame exactamente `MAL_CLIENT_ID` y que la lista de MAL siga siendo pública.
+## Links
+
+- Preview: \`https://vonpeco.github.io/mal-last5-completed/\`
+- BBCode: \`https://vonpeco.github.io/mal-last5-completed/profile-bbcode.txt\`
+- Cover 1: \`https://vonpeco.github.io/mal-last5-completed/covers/anime-1.png\`
+- Redirect 1: \`https://vonpeco.github.io/mal-last5-completed/go/1/\`
