@@ -214,12 +214,12 @@ def make_bbcode(seasonal_count):
                 for slot in range(start, min(start + 3, count + 1))
             )
             blocks.append("[center]" + row + "[/center]")
-        return "\\n".join(blocks)
+        return "\n".join(blocks)
 
-    completed = "[center][b]Últimos 6 animes completados[/b][/center]\\n" + rows(6, "covers", "go")
+    completed = "[center][b]Últimos 6 animes completados[/b][/center]\n" + rows(6, "covers", "go")
     seasonal_heading = "[center][b]Series que estoy viendo de la temporada actual[/b][/center]"
     seasonal = rows(seasonal_count, "seasonal-covers", "seasonal/go") if seasonal_count else "[center]No hay series en emisión en tu lista Watching.[/center]"
-    return completed + "\\n\\n" + seasonal_heading + "\\n" + seasonal
+    return completed + "\n\n" + seasonal_heading + "\n" + seasonal
 
 def main():
     config = read_config()
@@ -254,7 +254,7 @@ def main():
     generate_covers(seasonal_entries, seasonal_cover_dir, "seasonal/go", 10)
 
     bbcode = make_bbcode(len(seasonal_entries))
-    (DOCS / "profile-bbcode.txt").write_text(bbcode + "\\n", encoding="utf-8")
+    (DOCS / "profile-bbcode.txt").write_text(bbcode + "\n", encoding="utf-8")
 
     width, height = config["width"], config["height"]
     preview = f"""<!doctype html>
