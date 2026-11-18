@@ -19,7 +19,7 @@ on:
         description: "Image frame inset from each outer edge in pixels"
         required: false
         type: string
-        default: "5"
+        default: "3"
       background_color:
         description: "Outer container background color (hex)"
         required: false
@@ -70,7 +70,7 @@ jobs:
           MAL_CLIENT_ID: ${{ secrets.MAL_CLIENT_ID }}
           POSTER_WIDTH: ${{ inputs.poster_width || '79' }}
           POSTER_HEIGHT: ${{ inputs.poster_height || '118' }}
-          POSTER_IMAGE_INSET: ${{ inputs.poster_image_inset || '5' }}
+          POSTER_IMAGE_INSET: ${{ inputs.poster_image_inset || '3' }}
           POSTER_BG_COLOR: ${{ inputs.background_color || '#1D1D1D' }}
           POSTER_BORDER_COLOR: ${{ inputs.border_color || '#F5364F' }}
           POSTER_BORDER_WIDTH: ${{ inputs.border_width || '2' }}
