@@ -67,14 +67,14 @@ jobs:
 
       - name: Generate cover images
         env:
-          MAL_CLIENT_ID: \${{ secrets.MAL_CLIENT_ID }}
-          POSTER_WIDTH: \${{ inputs.poster_width || '79' }}
-          POSTER_HEIGHT: \${{ inputs.poster_height || '118' }}
-          POSTER_IMAGE_INSET: \${{ inputs.poster_image_inset || '5' }}
-          POSTER_BG_COLOR: \${{ inputs.background_color || '#1D1D1D' }}
-          POSTER_BORDER_COLOR: \${{ inputs.border_color || '#F5364F' }}
-          POSTER_BORDER_WIDTH: \${{ inputs.border_width || '2' }}
-          POSTER_RADIUS: \${{ inputs.border_radius || '5' }}
+          MAL_CLIENT_ID: ${{ secrets.MAL_CLIENT_ID }}
+          POSTER_WIDTH: ${{ inputs.poster_width || '79' }}
+          POSTER_HEIGHT: ${{ inputs.poster_height || '118' }}
+          POSTER_IMAGE_INSET: ${{ inputs.poster_image_inset || '5' }}
+          POSTER_BG_COLOR: ${{ inputs.background_color || '#1D1D1D' }}
+          POSTER_BORDER_COLOR: ${{ inputs.border_color || '#F5364F' }}
+          POSTER_BORDER_WIDTH: ${{ inputs.border_width || '2' }}
+          POSTER_RADIUS: ${{ inputs.border_radius || '5' }}
         run: python generate.py
 
       - name: Upload Pages artifact
@@ -85,7 +85,7 @@ jobs:
   deploy:
     environment:
       name: github-pages
-      url: \${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     needs: build
     steps:
