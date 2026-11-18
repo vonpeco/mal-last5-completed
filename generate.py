@@ -212,26 +212,44 @@ def make_bbcode(seasonal_count):
             for slot in range(first, last + 1)
         )
 
-    completed = (
-        "[center][b]Últimos 6 animes completados[/b][/center]"
-        "[center]" + image_row("covers", "go", 1, 3) + "[/center]"
-        "[center]" + image_row("covers", "go", 4, 6) + "[/center]"
+    def decorative(url):
+        return f"[img]{url}[/img]"
+
+    # Decorative artwork supplied for VonPeco's custom profile layout.
+    decor = {
+        "a": "https://i.imgur.com/HoVhMNY.jpeg",
+        "b": "https://i.imgur.com/VsBHp2E.jpeg",
+        "c": "https://i.imgur.com/cjuv0aE.jpeg",
+        "d": "https://i.imgur.com/Pf3PIRa.jpeg",
+        "e": "https://i.imgur.com/wQk0089.jpeg",
+        "f": "https://i.imgur.com/9uQJipM.jpeg",
+        "g": "https://i.imgur.com/n65xxAu.jpeg",
+        "h": "https://i.imgur.com/U0d3jk5.jpeg",
+        "i": "https://i.imgur.com/h1r5SVW.jpeg",
+        "j": "https://i.imgur.com/u3VUcHi.jpeg",
+    }
+
+    # Two continuous rows, with decorative images framing the seasonal
+    # and completed covers. Cache-busted cover URLs are regenerated each run.
+    first_line = (
+        decorative(decor["a"]) + decorative(decor["b"]) + decorative(decor["c"])
+        + image_row("seasonal-covers", "seasonal/go", 1, min(6, seasonal_count))
+        + decorative(decor["d"])
+        + image_row("covers", "go", 1, 3)
+        + decorative(decor["e"])
     )
 
-    seasonal_heading = "[center][b]Series que estoy viendo de la temporada actual[/b][/center]"
-    if seasonal_count:
-        seasonal = (
-            "[center]" + image_row("seasonal-covers", "seasonal/go", 1, min(6, seasonal_count)) + "[/center]"
-        )
-        if seasonal_count > 6:
-            seasonal += (
-                "[center]" + image_row("seasonal-covers", "seasonal/go", 7, seasonal_count) + "[/center]"
-            )
-    else:
-        seasonal = "[center]No hay series en emisión en tu lista Watching.[/center]"
+    second_line = (
+        decorative(decor["f"]) + decorative(decor["g"])
+        + image_row("seasonal-covers", "seasonal/go", 7, min(12, seasonal_count))
+        + decorative(decor["h"])
+        + image_row("covers", "go", 4, 6)
+        + decorative(decor["i"])
+    )
 
-    # No table: seasonal anime first (6x2), followed by completed anime (3x2).
-    return seasonal_heading + seasonal + completed
+    # Keep the final decorative footer image on its own line, matching
+    # the user's supplied BBCode composition.
+    return first_line + "\\n" + second_line + "\\n" + decorative(decor["j"])
 
 
 def main():
@@ -270,6 +288,29 @@ def main():
     (DOCS / "profile-bbcode.txt").write_text(bbcode + "\n", encoding="utf-8")
 
     width, height = config["width"], config["height"]
+    decor_urls = [
+        "https://i.imgur.com/HoVhMNY.jpeg",
+        "https://i.imgur.com/VsBHp2E.jpeg",
+        "https://i.imgur.com/cjuv0aE.jpeg",
+        "https://i.imgur.com/Pf3PIRa.jpeg",
+        "https://i.imgur.com/wQk0089.jpeg",
+        "https://i.imgur.com/9uQJipM.jpeg",
+        "https://i.imgur.com/n65xxAu.jpeg",
+        "https://i.imgur.com/U0d3jk5.jpeg",
+        "https://i.imgur.com/h1r5SVW.jpeg",
+        "https://i.imgur.com/u3VUcHi.jpeg",
+    ]
+
+    def preview_img(src, alt=""):
+        return f'<img src="{html.escape(src, quote=True)}" alt="{html.escape(alt, quote=True)}">'
+
+    def preview_cover(folder, redirect, slot):
+        return (
+            f'<a href="{redirect}/{slot}/">'
+            + preview_img(f"{folder}/anime-{slot}.png", f"Anime {slot}")
+            + '</a>'
+        )
+
     preview = f"""<!doctype html>
 <html lang="en">
 <head>
@@ -277,32 +318,53 @@ def main():
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>VonPeco - MAL anime covers</title>
 <style>
-body {{ font-family: Arial, sans-serif; max-width: 900px; margin: 30px auto; padding: 0 16px; }}
-.anime-list {{ display:grid; grid-template-columns:repeat(3, {width}px); gap:8px; justify-content:center; padding:0; margin:16px auto 28px; list-style:none; }}
-.anime-list li {{ width:{width}px; height:{height}px; overflow:hidden; background:{config['background']}; }}
-.anime-list img {{ display:block; width:{width}px; height:{height}px; }}
-h2 {{ text-align:center; }}
+body {{ font-family: Arial, sans-serif; margin: 24px; padding: 0; }}
+.profile-layout {{ line-height: 0; white-space: nowrap; overflow-x: auto; }}
+.profile-layout img {{ display: inline-block; vertical-align: middle; }}
+.profile-layout a {{ display: inline-block; vertical-align: middle; }}
+.profile-layout .decor {{ }}
+.profile-layout .cover {{ width:{width}px; height:{height}px; }}
+.profile-row {{ margin: 0; padding: 0; }}
 </style>
 </head>
 <body>
-<h2>Últimos 6 animes completados</h2>
-<ul class="anime-list">
+<div class="profile-layout">
+<div class="profile-row">
+{preview_img(decor_urls[0], "Decorative image")}
+{preview_img(decor_urls[1], "Decorative image")}
+{preview_img(decor_urls[2], "Decorative image")}
 """
     preview += "".join(
-        f'<li><a href="go/{i}/"><img src="covers/anime-{i}.png" alt="Completed anime {i}"></a></li>'
-        for i in range(1, 7)
+        f'<a href="seasonal/go/{i}/">{preview_img(f"seasonal-covers/anime-{i}.png", f"Seasonal anime {i}")}</a>'
+        for i in range(1, min(6, len(seasonal_entries)) + 1)
     )
-    preview += """
-</ul>
-<h2>Series que estoy viendo de la temporada actual</h2>
-<ul class="anime-list">
-"""
+    preview += preview_img(decor_urls[3], "Decorative image")
     preview += "".join(
-        f'<li><a href="seasonal/go/{i}/"><img src="seasonal-covers/anime-{i}.png" alt="Current seasonal anime {i}"></a></li>'
-        for i in range(1, len(seasonal_entries) + 1)
+        f'<a href="go/{i}/">{preview_img(f"covers/anime-{i}.png", f"Completed anime {i}")}</a>'
+        for i in range(1, 4)
     )
-    preview += """
-</ul>
+    preview += preview_img(decor_urls[4], "Decorative image")
+    preview += """</div>
+<div class="profile-row">
+"""
+    preview += preview_img(decor_urls[5], "Decorative image")
+    preview += preview_img(decor_urls[6], "Decorative image")
+    preview += "".join(
+        f'<a href="seasonal/go/{i}/">{preview_img(f"seasonal-covers/anime-{i}.png", f"Seasonal anime {i}")}</a>'
+        for i in range(7, min(12, len(seasonal_entries)) + 1)
+    )
+    preview += preview_img(decor_urls[7], "Decorative image")
+    preview += "".join(
+        f'<a href="go/{i}/">{preview_img(f"covers/anime-{i}.png", f"Completed anime {i}")}</a>'
+        for i in range(4, 7)
+    )
+    preview += preview_img(decor_urls[8], "Decorative image")
+    preview += """</div>
+<div class="profile-row">
+"""
+    preview += preview_img(decor_urls[9], "Decorative image")
+    preview += """</div>
+</div>
 <p><a href="profile-bbcode.txt">BBCode para el perfil clásico de MAL</a></p>
 </body>
 </html>
