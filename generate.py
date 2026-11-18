@@ -21,7 +21,7 @@ def read_config():
     config = {
         "width": int(os.getenv("POSTER_WIDTH", "79")),
         "height": int(os.getenv("POSTER_HEIGHT", "118")),
-        "image_inset": int(os.getenv("POSTER_IMAGE_INSET", "5")),
+        "image_inset": int(os.getenv("POSTER_IMAGE_INSET", "3")),
         "background": os.getenv("POSTER_BG_COLOR", "#1D1D1D"),
         "border_color": os.getenv("POSTER_BORDER_COLOR", "#F5364F"),
         "border_width": float(os.getenv("POSTER_BORDER_WIDTH", "2")),
