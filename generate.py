@@ -233,7 +233,7 @@ def make_bbcode(seasonal_count):
     # and completed covers. Cache-busted cover URLs are regenerated each run.
     first_line = (
         decorative(decor["a"]) + decorative(decor["b"]) + decorative(decor["c"])
-        + image_row("seasonal-covers", "seasonal/go", 1, min(6, seasonal_count))
+        + image_row("seasonal-covers", "seasonal/go", 1, 6)
         + decorative(decor["d"])
         + image_row("covers", "go", 1, 3)
         + decorative(decor["e"])
@@ -241,7 +241,7 @@ def make_bbcode(seasonal_count):
 
     second_line = (
         decorative(decor["f"]) + decorative(decor["g"])
-        + image_row("seasonal-covers", "seasonal/go", 7, min(12, seasonal_count))
+        + image_row("seasonal-covers", "seasonal/go", 7, 12)
         + decorative(decor["h"])
         + image_row("covers", "go", 4, 6)
         + decorative(decor["i"])
@@ -336,7 +336,7 @@ body {{ font-family: Arial, sans-serif; margin: 24px; padding: 0; }}
 """
     preview += "".join(
         f'<a href="seasonal/go/{i}/">{preview_img(f"seasonal-covers/anime-{i}.png", f"Seasonal anime {i}")}</a>'
-        for i in range(1, min(6, len(seasonal_entries)) + 1)
+        for i in range(1, 7)
     )
     preview += preview_img(decor_urls[3], "Decorative image")
     preview += "".join(
@@ -351,7 +351,7 @@ body {{ font-family: Arial, sans-serif; margin: 24px; padding: 0; }}
     preview += preview_img(decor_urls[6], "Decorative image")
     preview += "".join(
         f'<a href="seasonal/go/{i}/">{preview_img(f"seasonal-covers/anime-{i}.png", f"Seasonal anime {i}")}</a>'
-        for i in range(7, min(12, len(seasonal_entries)) + 1)
+        for i in range(7, 13)
     )
     preview += preview_img(decor_urls[7], "Decorative image")
     preview += "".join(
