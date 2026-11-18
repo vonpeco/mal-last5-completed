@@ -147,7 +147,7 @@ def get_current_season_entries():
         url = (payload.get("paging") or {}).get("next")
         params = None
 
-    return validate_entries(entries)[:10]
+    return validate_entries(entries)[:12]
 
 
 def get_cover(node):
@@ -221,24 +221,17 @@ def make_bbcode(seasonal_count):
     seasonal_heading = "[center][b]Series que estoy viendo de la temporada actual[/b][/center]"
     if seasonal_count:
         seasonal = (
-            "[center]" + image_row("seasonal-covers", "seasonal/go", 1, min(5, seasonal_count)) + "[/center]"
+            "[center]" + image_row("seasonal-covers", "seasonal/go", 1, min(6, seasonal_count)) + "[/center]"
         )
-        if seasonal_count > 5:
+        if seasonal_count > 6:
             seasonal += (
-                "[center]" + image_row("seasonal-covers", "seasonal/go", 6, seasonal_count) + "[/center]"
+                "[center]" + image_row("seasonal-covers", "seasonal/go", 7, seasonal_count) + "[/center]"
             )
     else:
         seasonal = "[center]No hay series en emisión en tu lista Watching.[/center]"
 
-    # Two columns: completed anime on the left (3x2), current season on the right (5x2).
-    return (
-        '[table border="0" cellspacing="0" cellpadding="0"]'
-        "[tr]"
-        "[td valign=\"top\"]" + completed + "[/td]"
-        "[td valign=\"top\"]" + seasonal_heading + seasonal + "[/td]"
-        "[/tr]"
-        "[/table]"
-    )
+    # No table: seasonal anime first (6x2), followed by completed anime (3x2).
+    return seasonal_heading + seasonal + completed
 
 
 def main():
@@ -271,7 +264,7 @@ def main():
             print(f"{redirect_root} {slot}: {title} -> {destination}")
 
     generate_covers(completed_entries, cover_dir, "go", 6)
-    generate_covers(seasonal_entries, seasonal_cover_dir, "seasonal/go", 10)
+    generate_covers(seasonal_entries, seasonal_cover_dir, "seasonal/go", 12)
 
     bbcode = make_bbcode(len(seasonal_entries))
     (DOCS / "profile-bbcode.txt").write_text(bbcode + "\n", encoding="utf-8")
