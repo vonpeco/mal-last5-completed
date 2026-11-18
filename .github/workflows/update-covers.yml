@@ -6,32 +6,37 @@ on:
   workflow_dispatch:
     inputs:
       poster_width:
-        description: "Poster width in pixels"
+        description: "Outer container width in pixels"
         required: false
         type: string
         default: "79"
       poster_height:
-        description: "Poster height in pixels"
+        description: "Outer container height in pixels"
         required: false
         type: string
         default: "118"
+      poster_image_inset:
+        description: "Image frame inset from each outer edge in pixels"
+        required: false
+        type: string
+        default: "5"
       background_color:
-        description: "Poster background color (hex)"
+        description: "Outer container background color (hex)"
         required: false
         type: string
         default: "#1D1D1D"
       border_color:
-        description: "Poster border color (hex)"
+        description: "Image border color (hex)"
         required: false
         type: string
         default: "#F5364F"
       border_width:
-        description: "Poster border width in pixels"
+        description: "Image border width in pixels"
         required: false
         type: string
-        default: "1.5"
+        default: "2"
       border_radius:
-        description: "Poster corner radius in pixels"
+        description: "Image corner radius in pixels"
         required: false
         type: string
         default: "5"
@@ -62,13 +67,14 @@ jobs:
 
       - name: Generate cover images
         env:
-          MAL_CLIENT_ID: ${{ secrets.MAL_CLIENT_ID }}
-          POSTER_WIDTH: ${{ inputs.poster_width || '79' }}
-          POSTER_HEIGHT: ${{ inputs.poster_height || '118' }}
-          POSTER_BG_COLOR: ${{ inputs.background_color || '#1D1D1D' }}
-          POSTER_BORDER_COLOR: ${{ inputs.border_color || '#F5364F' }}
-          POSTER_BORDER_WIDTH: ${{ inputs.border_width || '1.5' }}
-          POSTER_RADIUS: ${{ inputs.border_radius || '5' }}
+          MAL_CLIENT_ID: \${{ secrets.MAL_CLIENT_ID }}
+          POSTER_WIDTH: \${{ inputs.poster_width || '79' }}
+          POSTER_HEIGHT: \${{ inputs.poster_height || '118' }}
+          POSTER_IMAGE_INSET: \${{ inputs.poster_image_inset || '5' }}
+          POSTER_BG_COLOR: \${{ inputs.background_color || '#1D1D1D' }}
+          POSTER_BORDER_COLOR: \${{ inputs.border_color || '#F5364F' }}
+          POSTER_BORDER_WIDTH: \${{ inputs.border_width || '2' }}
+          POSTER_RADIUS: \${{ inputs.border_radius || '5' }}
         run: python generate.py
 
       - name: Upload Pages artifact
@@ -79,7 +85,7 @@ jobs:
   deploy:
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: \${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     needs: build
     steps:
