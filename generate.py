@@ -174,9 +174,10 @@ def make_bbcode():
         click_url = f"{SITE}/go/{slot}/"
         return f"[url={click_url}][img]{image_url}[/img][/url]"
 
-    row_one = " ".join(linked_cover(i) for i in range(1, 4))
-    row_two = " ".join(linked_cover(i) for i in range(4, 7))
-    return "[center]\n" + row_one + "\n[/center]\n[center]\n" + row_two + "\n[/center]"
+    # Keep image tags directly adjacent so MAL does not render text-space gaps.
+    row_one = "".join(linked_cover(i) for i in range(1, 4))
+    row_two = "".join(linked_cover(i) for i in range(4, 7))
+    return "[center]" + row_one + "[/center]\n[center]" + row_two + "[/center]"
 
 
 def main():
