@@ -12,10 +12,35 @@ USERNAME = "VonPeco"
 CLIENT_ID = os.environ["MAL_CLIENT_ID"]
 SITE = "https://vonpeco.github.io/mal-last5-completed"
 API_URL = f"https://api.myanimelist.net/v2/users/{USERNAME}/animelist"
-POSTER_H = 112
-POSTER_W = 72
-BG = (35, 40, 49)
 DOCS = Path("docs")
+SCALE = 4
+
+
+def read_config():
+    config = {
+        "width": int(os.getenv("POSTER_WIDTH", "79")),
+        "height": int(os.getenv("POSTER_HEIGHT", "118")),
+        "background": os.getenv("POSTER_BG_COLOR", "#1D1D1D"),
+        "border_color": os.getenv("POSTER_BORDER_COLOR", "#F5364F"),
+        "border_width": float(os.getenv("POSTER_BORDER_WIDTH", "1.5")),
+        "radius": float(os.getenv("POSTER_RADIUS", "5")),
+    }
+    if not 40 <= config["width"] <= 300 or not 60 <= config["height"] <= 450:
+        raise ValueError("Poster dimensions are outside the allowed range.")
+    for key in ("background", "border_color"):
+        if not re.fullmatch(r"#[0-9A-Fa-f]{6}", config[key]):
+            raise ValueError(f"Invalid color for {key}: {config[key]}")
+        config[key] = config[key].upper()
+    if not 0 <= config["border_width"] <= 10:
+        raise ValueError("Border width must be between 0 and 10 px.")
+    if not 0 <= config["radius"] <= 30:
+        raise ValueError("Corner radius must be between 0 and 30 px.")
+    return config
+
+
+def rgb(hex_color):
+    value = hex_color.lstrip("#")
+    return tuple(int(value[i:i + 2], 16) for i in (0, 2, 4))
 
 
 def get_entries():
@@ -25,13 +50,13 @@ def get_entries():
         params={
             "status": "completed",
             "sort": "list_updated_at",
-            "limit": 5,
+            "limit": 6,
             "fields": "main_picture",
         },
         timeout=30,
     )
     response.raise_for_status()
-    entries = response.json().get("data", [])[:5]
+    entries = response.json().get("data", [])[:6]
     for entry in entries:
         node = entry.get("node", {})
         if not isinstance(node.get("id"), int):
@@ -39,15 +64,38 @@ def get_entries():
     return entries
 
 
-def add_cover_frame(image):
-    draw = ImageDraw.Draw(image)
-    draw.rounded_rectangle(
-        (0, 0, POSTER_W - 1, POSTER_H - 1),
-        radius=4,
-        outline=(190, 190, 190),
-        width=1,
-    )
-    return image
+def make_cover_frame(config, source=None):
+    width, height = config["width"], config["height"]
+    w, h = width * SCALE, height * SCALE
+    background = Image.new("RGBA", (w, h), rgb(config["background"]) + (255,))
+
+    if source is not None:
+        fitted = ImageOps.fit(
+            source.convert("RGB"),
+            (w, h),
+            method=Image.Resampling.LANCZOS,
+            centering=(0.5, 0.5),
+        ).convert("RGBA")
+        mask = Image.new("L", (w, h), 0)
+        ImageDraw.Draw(mask).rounded_rectangle(
+            (0, 0, w - 1, h - 1),
+            radius=int(round(config["radius"] * SCALE)),
+            fill=255,
+        )
+        background.paste(fitted, (0, 0), mask)
+
+    if config["border_width"] > 0:
+        draw = ImageDraw.Draw(background)
+        line_width = max(1, int(round(config["border_width"] * SCALE)))
+        inset = line_width / 2
+        draw.rounded_rectangle(
+            (inset, inset, w - 1 - inset, h - 1 - inset),
+            radius=max(0, int(round(config["radius"] * SCALE))),
+            outline=rgb(config["border_color"]) + (255,),
+            width=line_width,
+        )
+
+    return background.resize((width, height), Image.Resampling.LANCZOS).convert("RGB")
 
 
 def get_cover(node):
@@ -55,34 +103,18 @@ def get_cover(node):
     url = picture.get("large") or picture.get("medium")
     if not url:
         return None
-
     response = requests.get(
         url,
         timeout=30,
-        headers={"User-Agent": "MAL-Last5-Profile/1.0"},
+        headers={"User-Agent": "MAL-Last6-Profile/1.0"},
     )
     response.raise_for_status()
-
-    image = Image.open(BytesIO(response.content)).convert("RGB")
-
-    # Fill the entire 72x112 poster area, cropping a little if the aspect ratio differs.
-    canvas = ImageOps.fit(
-        image,
-        (POSTER_W, POSTER_H),
-        method=Image.Resampling.LANCZOS,
-        centering=(0.5, 0.5),
-    )
-
-    return add_cover_frame(canvas)
+    return Image.open(BytesIO(response.content)).convert("RGB")
 
 
 def get_anime_url(node):
     anime_id = node["id"]
     title = node.get("title") or f"Anime {anime_id}"
-
-    # Build the title part of MAL's detail URL from the exact title returned by MAL.
-    # Spaces become underscores; punctuation such as ":" becomes an underscore,
-    # while exclamation marks are removed, matching the example URL format.
     slug = title.replace(":", "_")
     slug = re.sub(r"[!?¡¿]+", "", slug)
     slug = re.sub(r"[^\w\s-]", "", slug, flags=re.UNICODE)
@@ -121,110 +153,69 @@ def make_bbcode():
         return f"[url={click_url}][img]{image_url}[/img][/url]"
 
     row_one = " ".join(linked_cover(i) for i in range(1, 4))
-    row_two = " ".join(linked_cover(i) for i in range(4, 6))
-    return (
-        "[center]\n"
-        + row_one
-        + "\n[/center]\n"
-        + "[center]\n"
-        + row_two
-        + "\n[/center]"
-    )
+    row_two = " ".join(linked_cover(i) for i in range(4, 7))
+    return "[center]\n" + row_one + "\n[/center]\n[center]\n" + row_two + "\n[/center]"
 
 
 def main():
+    config = read_config()
     entries = get_entries()
     cover_dir = DOCS / "covers"
     cover_dir.mkdir(parents=True, exist_ok=True)
 
-    for slot in range(1, 6):
+    for slot in range(1, 7):
         destination = f"https://myanimelist.net/profile/{USERNAME}"
         title = "Sin anime"
-        cover = add_cover_frame(Image.new("RGB", (POSTER_W, POSTER_H), BG))
-
+        source = None
         if slot <= len(entries):
             node = entries[slot - 1].get("node", {})
             anime_id = node["id"]
             title = node.get("title") or f"Anime {anime_id}"
             destination = get_anime_url(node)
             try:
-                downloaded = get_cover(node)
-                if downloaded is not None:
-                    cover = downloaded
+                source = get_cover(node)
             except Exception as exc:
                 raise RuntimeError(f"No se pudo descargar la portada de {title}: {exc}") from exc
 
-        image_path = cover_dir / f"anime-{slot}.png"
-        cover.save(image_path, format="PNG", optimize=True)
+        cover = make_cover_frame(config, source)
+        cover.save(cover_dir / f"anime-{slot}.png", format="PNG", optimize=True)
         write_redirect(slot, destination, title)
         print(f"Slot {slot}: {title} -> {destination}")
 
-    bbcode = make_bbcode()
-    (DOCS / "profile-bbcode.txt").write_text(bbcode + "\n", encoding="utf-8")
-    (DOCS / "index.html").write_text(
-        """<!doctype html>
-<html lang="es">
+    (DOCS / "profile-bbcode.txt").write_text(make_bbcode() + "\n", encoding="utf-8")
+    width, height = config["width"], config["height"]
+    gap = 8
+    preview = f"""<!doctype html>
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>VonPeco - últimos 5 animes completados</title>
+<title>VonPeco - latest 6 completed anime</title>
 <style>
-body {
-    font-family: Arial, sans-serif;
-    max-width: 900px;
-    margin: 30px auto;
-    padding: 0 16px;
-}
-
-.anime-list {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    align-content: flex-start;
-    width: 236px;
-    height: 176px;
-    padding: 0;
-    margin: 0 auto;
-    list-style: none;
-    box-sizing: border-box;
-    overflow: visible;
-}
-
-.anime-list li {
-    width: 72px;
-    height: 112px;
-    box-sizing: border-box;
-    border-radius: 4px;
-    overflow: hidden;
-}
-
-.anime-list li:nth-child(n+4) {
-    margin: -24px 10px 0 0;
-}
-
-.anime-list img {
-    display: block;
-    width: 72px;
-    height: 112px;
-}
+body {{ font-family: Arial, sans-serif; max-width: 900px; margin: 30px auto; padding: 0 16px; }}
+.anime-list {{ display:grid; grid-template-columns:repeat(3, {width}px); gap:{gap}px; justify-content:center; padding:0; margin:24px auto; list-style:none; }}
+.anime-list li {{ width:{width}px; height:{height}px; overflow:hidden; border-radius:{config['radius']}px; }}
+.anime-list img {{ display:block; width:{width}px; height:{height}px; }}
 </style>
 </head>
 <body>
-<h1>Últimos 5 animes completados de VonPeco</h1>
-<p>Cada portada abre el anime correspondiente en MyAnimeList.</p>
+<h1>Latest 6 completed anime of VonPeco</h1>
+<p>Each cover opens its corresponding MyAnimeList entry.</p>
 <ul class="anime-list">
-""" + "".join(
-            f'<li><a href="go/{i}/"><img src="covers/anime-{i}.png" alt="Anime {i}"></a></li>'
-            for i in range(1, 6)
-        ) + """
+"""
+    preview += "".join(
+        f'<li><a href="go/{i}/"><img src="covers/anime-{i}.png" alt="Anime {i}"></a></li>'
+        for i in range(1, 7)
+    )
+    preview += """
 </ul>
-<p><a href="profile-bbcode.txt">Ver el BBCode para pegar en el perfil clásico</a></p>
+<p><a href="profile-bbcode.txt">BBCode for the classic profile</a></p>
 </body>
 </html>
-""",
-        encoding="utf-8",
-    )
-    print(f"Created 5 individual covers and redirect links from {len(entries)} completed anime entries.")
+"""
+    (DOCS / "index.html").write_text(preview, encoding="utf-8")
+    print(f"Created 6 individual covers and redirect links from {len(entries)} completed anime entries.")
+    print(f"Design: {width}x{height}, background {config['background']}, border {config['border_width']}px {config['border_color']}, radius {config['radius']}px")
 
 
 if __name__ == "__main__":
