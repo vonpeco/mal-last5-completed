@@ -1,3 +1,4 @@
+import hashlib
 import html
 import os
 import re
@@ -170,7 +171,10 @@ def write_redirect(slot, destination, title):
 
 def make_bbcode():
     def linked_cover(slot):
-        image_url = f"{SITE}/covers/anime-{slot}.png"
+        image_path = DOCS / "covers" / f"anime-{slot}.png"
+        # A content-based version changes the image URL only when that PNG changes.
+        version = hashlib.sha256(image_path.read_bytes()).hexdigest()[:12]
+        image_url = f"{SITE}/covers/anime-{slot}.png?v={version}"
         click_url = f"{SITE}/go/{slot}/"
         return f"[url={click_url}][img]{image_url}[/img][/url]"
 
