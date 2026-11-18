@@ -249,7 +249,7 @@ def make_bbcode(seasonal_count):
 
     # Keep the final decorative footer image on its own line, matching
     # the user's supplied BBCode composition.
-    return first_line + "\\n" + second_line + "\\n" + decorative(decor["j"])
+    return first_line + "\n" + second_line + "\n" + decorative(decor["j"])
 
 
 def main():
@@ -285,7 +285,7 @@ def main():
     generate_covers(seasonal_entries, seasonal_cover_dir, "seasonal/go", 12)
 
     bbcode = make_bbcode(len(seasonal_entries))
-    (DOCS / "profile-bbcode.txt").write_text(bbcode + "\n", encoding="utf-8")
+    (DOCS / "profile-bbcode.txt").write_text(bbcode, encoding="utf-8")
 
     width, height = config["width"], config["height"]
     decor_urls = [
