@@ -100,7 +100,15 @@ def make_cover_frame(config, source=None):
     return canvas.resize((config["width"], config["height"]), Image.Resampling.LANCZOS).convert("RGB")
 
 
-def get_entries():
+def validate_entries(entries):
+    for entry in entries:
+        node = entry.get("node", {})
+        if not isinstance(node.get("id"), int):
+            raise ValueError(f"MyAnimeList no devolvió un ID válido para: {node.get('title', 'anime')}")
+    return entries
+
+
+def get_completed_entries():
     response = requests.get(
         API_URL,
         headers={"X-MAL-CLIENT-ID": CLIENT_ID},
@@ -113,12 +121,33 @@ def get_entries():
         timeout=30,
     )
     response.raise_for_status()
-    entries = response.json().get("data", [])[:6]
-    for entry in entries:
-        node = entry.get("node", {})
-        if not isinstance(node.get("id"), int):
-            raise ValueError(f"MyAnimeList no devolvió un ID válido para: {node.get('title', 'anime')}")
-    return entries
+    return validate_entries(response.json().get("data", [])[:6])
+
+
+def get_current_season_entries():
+    headers = {"X-MAL-CLIENT-ID": CLIENT_ID}
+    params = {
+        "status": "watching",
+        "sort": "list_updated_at",
+        "limit": 100,
+        "fields": "main_picture,status,media_type,start_season",
+    }
+    url = API_URL
+    entries = []
+
+    # Follow MAL pagination so the ten picks are selected from the full Watching list.
+    while url:
+        response = requests.get(url, headers=headers, params=params if url == API_URL else None, timeout=30)
+        response.raise_for_status()
+        payload = response.json()
+        entries.extend(
+            entry for entry in payload.get("data", [])
+            if entry.get("node", {}).get("status") == "currently_airing"
+        )
+        url = (payload.get("paging") or {}).get("next")
+        params = None
+
+    return validate_entries(entries)[:10]
 
 
 def get_cover(node):
@@ -146,7 +175,7 @@ def get_anime_url(node):
     return f"https://myanimelist.net/anime/{anime_id}/{slug}"
 
 
-def write_redirect(slot, destination, title):
+def write_redirect(slot, destination, title, redirect_root="go"):
     safe_destination = html.escape(destination, quote=True)
     safe_title = html.escape(title or "MyAnimeList", quote=True)
     page = f"""<!doctype html>
@@ -164,91 +193,114 @@ def write_redirect(slot, destination, title):
 </body>
 </html>
 """
-    redirect_dir = DOCS / "go" / str(slot)
+    redirect_dir = DOCS / redirect_root / str(slot)
     redirect_dir.mkdir(parents=True, exist_ok=True)
     (redirect_dir / "index.html").write_text(page, encoding="utf-8")
 
 
-def make_bbcode():
-    def linked_cover(slot):
-        image_path = DOCS / "covers" / f"anime-{slot}.png"
-        # A content-based version changes the image URL only when that PNG changes.
+def make_bbcode(seasonal_count):
+    def linked_cover(folder, slot, redirect_path):
+        image_path = DOCS / folder / f"anime-{slot}.png"
         version = hashlib.sha256(image_path.read_bytes()).hexdigest()[:12]
-        image_url = f"{SITE}/covers/anime-{slot}.png?v={version}"
-        click_url = f"{SITE}/go/{slot}/"
+        image_url = f"{SITE}/{folder}/anime-{slot}.png?v={version}"
+        click_url = f"{SITE}/{redirect_path}/{slot}/"
         return f"[url={click_url}][img]{image_url}[/img][/url]"
 
-    # Keep image tags directly adjacent so MAL does not render text-space gaps.
-    row_one = "".join(linked_cover(i) for i in range(1, 4))
-    row_two = "".join(linked_cover(i) for i in range(4, 7))
-    return "[center]" + row_one + "[/center]\n[center]" + row_two + "[/center]"
+    def rows(count, folder, redirect_path):
+        blocks = []
+        for start in range(1, count + 1, 3):
+            row = "".join(
+                linked_cover(folder, slot, redirect_path)
+                for slot in range(start, min(start + 3, count + 1))
+            )
+            blocks.append("[center]" + row + "[/center]")
+        return "\\n".join(blocks)
 
+    completed = "[center][b]Últimos 6 animes completados[/b][/center]\\n" + rows(6, "covers", "go")
+    seasonal_heading = "[center][b]Series que estoy viendo de la temporada actual[/b][/center]"
+    seasonal = rows(seasonal_count, "seasonal-covers", "seasonal/go") if seasonal_count else "[center]No hay series en emisión en tu lista Watching.[/center]"
+    return completed + "\\n\\n" + seasonal_heading + "\\n" + seasonal
 
 def main():
     config = read_config()
-    entries = get_entries()
+    completed_entries = get_completed_entries()
+    seasonal_entries = get_current_season_entries()
     cover_dir = DOCS / "covers"
+    seasonal_cover_dir = DOCS / "seasonal-covers"
     cover_dir.mkdir(parents=True, exist_ok=True)
+    seasonal_cover_dir.mkdir(parents=True, exist_ok=True)
 
-    for slot in range(1, 7):
-        destination = f"https://myanimelist.net/profile/{USERNAME}"
-        title = "Sin anime"
-        source = None
-        if slot <= len(entries):
-            node = entries[slot - 1].get("node", {})
-            anime_id = node["id"]
-            title = node.get("title") or f"Anime {anime_id}"
-            destination = get_anime_url(node)
-            try:
-                source = get_cover(node)
-            except Exception as exc:
-                raise RuntimeError(f"No se pudo descargar la portada de {title}: {exc}") from exc
+    def generate_covers(entries, folder, redirect_root, slots):
+        for slot in range(1, slots + 1):
+            destination = f"https://myanimelist.net/profile/{USERNAME}"
+            title = "Sin anime"
+            source = None
+            if slot <= len(entries):
+                node = entries[slot - 1].get("node", {})
+                anime_id = node["id"]
+                title = node.get("title") or f"Anime {anime_id}"
+                destination = get_anime_url(node)
+                try:
+                    source = get_cover(node)
+                except Exception as exc:
+                    raise RuntimeError(f"No se pudo descargar la portada de {title}: {exc}") from exc
 
-        cover = make_cover_frame(config, source)
-        cover.save(cover_dir / f"anime-{slot}.png", format="PNG", optimize=True)
-        write_redirect(slot, destination, title)
-        print(f"Slot {slot}: {title} -> {destination}")
+            cover = make_cover_frame(config, source)
+            cover.save(folder / f"anime-{slot}.png", format="PNG", optimize=True)
+            write_redirect(slot, destination, title, redirect_root)
+            print(f"{redirect_root} {slot}: {title} -> {destination}")
 
-    (DOCS / "profile-bbcode.txt").write_text(make_bbcode() + "\n", encoding="utf-8")
+    generate_covers(completed_entries, cover_dir, "go", 6)
+    generate_covers(seasonal_entries, seasonal_cover_dir, "seasonal/go", 10)
+
+    bbcode = make_bbcode(len(seasonal_entries))
+    (DOCS / "profile-bbcode.txt").write_text(bbcode + "\\n", encoding="utf-8")
 
     width, height = config["width"], config["height"]
-    inset = config["image_inset"]
     preview = f"""<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>VonPeco - latest 6 completed anime</title>
+<title>VonPeco - MAL anime covers</title>
 <style>
 body {{ font-family: Arial, sans-serif; max-width: 900px; margin: 30px auto; padding: 0 16px; }}
-.anime-list {{ display:grid; grid-template-columns:repeat(3, {width}px); gap:8px; justify-content:center; padding:0; margin:24px auto; list-style:none; }}
+.anime-list {{ display:grid; grid-template-columns:repeat(3, {width}px); gap:8px; justify-content:center; padding:0; margin:16px auto 28px; list-style:none; }}
 .anime-list li {{ width:{width}px; height:{height}px; overflow:hidden; background:{config['background']}; }}
 .anime-list img {{ display:block; width:{width}px; height:{height}px; }}
+h2 {{ text-align:center; }}
 </style>
 </head>
 <body>
-<h1>Latest 6 completed anime of VonPeco</h1>
-<p>Each cover opens its corresponding MyAnimeList entry.</p>
+<h2>Últimos 6 animes completados</h2>
 <ul class="anime-list">
 """
     preview += "".join(
-        f'<li><a href="go/{i}/"><img src="covers/anime-{i}.png" alt="Anime {i}"></a></li>'
+        f'<li><a href="go/{i}/"><img src="covers/anime-{i}.png" alt="Completed anime {i}"></a></li>'
         for i in range(1, 7)
     )
     preview += """
 </ul>
-<p><a href="profile-bbcode.txt">BBCode for the classic profile</a></p>
+<h2>Series que estoy viendo de la temporada actual</h2>
+<ul class="anime-list">
+"""
+    preview += "".join(
+        f'<li><a href="seasonal/go/{i}/"><img src="seasonal-covers/anime-{i}.png" alt="Current seasonal anime {i}"></a></li>'
+        for i in range(1, len(seasonal_entries) + 1)
+    )
+    preview += """
+</ul>
+<p><a href="profile-bbcode.txt">BBCode para el perfil clásico de MAL</a></p>
 </body>
 </html>
 """
     (DOCS / "index.html").write_text(preview, encoding="utf-8")
-    print(f"Created 6 covers from {len(entries)} completed anime entries.")
+    print(f"Created 6 completed covers and {len(seasonal_entries)} current-season covers.")
     print(
-        f"Outer container: {width}x{height}, {config['background']}; "
-        f"inner image inset: {inset}px; border: {config['border_width']}px "
-        f"{config['border_color']}; radius: {config['radius']}px."
+        f"Cover design: {width}x{height}, background {config['background']}; "
+        f"inset {config['image_inset']}px; border {config['border_width']}px "
+        f"{config['border_color']}; radius {config['radius']}px."
     )
-
 
 if __name__ == "__main__":
     main()
