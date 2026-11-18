@@ -20,13 +20,18 @@ def read_config():
     config = {
         "width": int(os.getenv("POSTER_WIDTH", "79")),
         "height": int(os.getenv("POSTER_HEIGHT", "118")),
+        "image_inset": int(os.getenv("POSTER_IMAGE_INSET", "5")),
         "background": os.getenv("POSTER_BG_COLOR", "#1D1D1D"),
         "border_color": os.getenv("POSTER_BORDER_COLOR", "#F5364F"),
-        "border_width": float(os.getenv("POSTER_BORDER_WIDTH", "1.5")),
+        "border_width": float(os.getenv("POSTER_BORDER_WIDTH", "2")),
         "radius": float(os.getenv("POSTER_RADIUS", "5")),
     }
     if not 40 <= config["width"] <= 300 or not 60 <= config["height"] <= 450:
-        raise ValueError("Poster dimensions are outside the allowed range.")
+        raise ValueError("Outer container dimensions are outside the allowed range.")
+    if not 0 <= config["image_inset"] <= 40:
+        raise ValueError("Image inset must be between 0 and 40 px.")
+    if config["width"] - 2 * config["image_inset"] < 8 or config["height"] - 2 * config["image_inset"] < 8:
+        raise ValueError("The image frame is too small for the selected container and inset.")
     for key in ("background", "border_color"):
         if not re.fullmatch(r"#[0-9A-Fa-f]{6}", config[key]):
             raise ValueError(f"Invalid color for {key}: {config[key]}")
@@ -41,6 +46,57 @@ def read_config():
 def rgb(hex_color):
     value = hex_color.lstrip("#")
     return tuple(int(value[i:i + 2], 16) for i in (0, 2, 4))
+
+
+def make_cover_frame(config, source=None):
+    outer_w = config["width"] * SCALE
+    outer_h = config["height"] * SCALE
+    inset = config["image_inset"] * SCALE
+    border = int(round(config["border_width"] * SCALE))
+    radius = int(round(config["radius"] * SCALE))
+
+    # The outside rectangle is a separate solid-color container.
+    canvas = Image.new("RGBA", (outer_w, outer_h), rgb(config["background"]) + (255,))
+
+    # The image frame is centered inside that container with an adjustable inset.
+    x0, y0 = inset, inset
+    x1, y1 = outer_w - inset, outer_h - inset
+    frame_w, frame_h = x1 - x0, y1 - y0
+
+    if config["border_width"] > 0:
+        ImageDraw.Draw(canvas).rounded_rectangle(
+            (x0, y0, x1 - 1, y1 - 1),
+            radius=radius,
+            outline=rgb(config["border_color"]) + (255,),
+            width=border,
+        )
+
+    if source is not None:
+        content_x0 = x0 + border
+        content_y0 = y0 + border
+        content_x1 = x1 - border
+        content_y1 = y1 - border
+        content_w = max(1, content_x1 - content_x0)
+        content_h = max(1, content_y1 - content_y0)
+
+        # Crop to fill the inner frame without distorting the original poster.
+        fitted = ImageOps.fit(
+            source.convert("RGB"),
+            (content_w, content_h),
+            method=Image.Resampling.LANCZOS,
+            centering=(0.5, 0.5),
+        ).convert("RGBA")
+
+        inner_radius = max(0, radius - border)
+        mask = Image.new("L", (content_w, content_h), 0)
+        ImageDraw.Draw(mask).rounded_rectangle(
+            (0, 0, content_w - 1, content_h - 1),
+            radius=inner_radius,
+            fill=255,
+        )
+        canvas.paste(fitted, (content_x0, content_y0), mask)
+
+    return canvas.resize((config["width"], config["height"]), Image.Resampling.LANCZOS).convert("RGB")
 
 
 def get_entries():
@@ -62,40 +118,6 @@ def get_entries():
         if not isinstance(node.get("id"), int):
             raise ValueError(f"MyAnimeList no devolvió un ID válido para: {node.get('title', 'anime')}")
     return entries
-
-
-def make_cover_frame(config, source=None):
-    width, height = config["width"], config["height"]
-    w, h = width * SCALE, height * SCALE
-    background = Image.new("RGBA", (w, h), rgb(config["background"]) + (255,))
-
-    if source is not None:
-        fitted = ImageOps.fit(
-            source.convert("RGB"),
-            (w, h),
-            method=Image.Resampling.LANCZOS,
-            centering=(0.5, 0.5),
-        ).convert("RGBA")
-        mask = Image.new("L", (w, h), 0)
-        ImageDraw.Draw(mask).rounded_rectangle(
-            (0, 0, w - 1, h - 1),
-            radius=int(round(config["radius"] * SCALE)),
-            fill=255,
-        )
-        background.paste(fitted, (0, 0), mask)
-
-    if config["border_width"] > 0:
-        draw = ImageDraw.Draw(background)
-        line_width = max(1, int(round(config["border_width"] * SCALE)))
-        inset = line_width / 2
-        draw.rounded_rectangle(
-            (inset, inset, w - 1 - inset, h - 1 - inset),
-            radius=max(0, int(round(config["radius"] * SCALE))),
-            outline=rgb(config["border_color"]) + (255,),
-            width=line_width,
-        )
-
-    return background.resize((width, height), Image.Resampling.LANCZOS).convert("RGB")
 
 
 def get_cover(node):
@@ -183,8 +205,9 @@ def main():
         print(f"Slot {slot}: {title} -> {destination}")
 
     (DOCS / "profile-bbcode.txt").write_text(make_bbcode() + "\n", encoding="utf-8")
+
     width, height = config["width"], config["height"]
-    gap = 8
+    inset = config["image_inset"]
     preview = f"""<!doctype html>
 <html lang="en">
 <head>
@@ -193,8 +216,8 @@ def main():
 <title>VonPeco - latest 6 completed anime</title>
 <style>
 body {{ font-family: Arial, sans-serif; max-width: 900px; margin: 30px auto; padding: 0 16px; }}
-.anime-list {{ display:grid; grid-template-columns:repeat(3, {width}px); gap:{gap}px; justify-content:center; padding:0; margin:24px auto; list-style:none; }}
-.anime-list li {{ width:{width}px; height:{height}px; overflow:hidden; border-radius:{config['radius']}px; }}
+.anime-list {{ display:grid; grid-template-columns:repeat(3, {width}px); gap:8px; justify-content:center; padding:0; margin:24px auto; list-style:none; }}
+.anime-list li {{ width:{width}px; height:{height}px; overflow:hidden; background:{config['background']}; }}
 .anime-list img {{ display:block; width:{width}px; height:{height}px; }}
 </style>
 </head>
@@ -214,8 +237,12 @@ body {{ font-family: Arial, sans-serif; max-width: 900px; margin: 30px auto; pad
 </html>
 """
     (DOCS / "index.html").write_text(preview, encoding="utf-8")
-    print(f"Created 6 individual covers and redirect links from {len(entries)} completed anime entries.")
-    print(f"Design: {width}x{height}, background {config['background']}, border {config['border_width']}px {config['border_color']}, radius {config['radius']}px")
+    print(f"Created 6 covers from {len(entries)} completed anime entries.")
+    print(
+        f"Outer container: {width}x{height}, {config['background']}; "
+        f"inner image inset: {inset}px; border: {config['border_width']}px "
+        f"{config['border_color']}; radius: {config['radius']}px."
+    )
 
 
 if __name__ == "__main__":
