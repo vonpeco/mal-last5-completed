@@ -206,20 +206,40 @@ def make_bbcode(seasonal_count):
         click_url = f"{SITE}/{redirect_path}/{slot}/"
         return f"[url={click_url}][img]{image_url}[/img][/url]"
 
-    def rows(count, folder, redirect_path):
-        blocks = []
-        for start in range(1, count + 1, 3):
-            row = "".join(
-                linked_cover(folder, slot, redirect_path)
-                for slot in range(start, min(start + 3, count + 1))
-            )
-            blocks.append("[center]" + row + "[/center]")
-        return "\n".join(blocks)
+    def image_row(folder, redirect_path, first, last):
+        return "".join(
+            linked_cover(folder, slot, redirect_path)
+            for slot in range(first, last + 1)
+        )
 
-    completed = "[center][b]Últimos 6 animes completados[/b][/center]\n" + rows(6, "covers", "go")
+    completed = (
+        "[center][b]Últimos 6 animes completados[/b][/center]"
+        "[center]" + image_row("covers", "go", 1, 3) + "[/center]"
+        "[center]" + image_row("covers", "go", 4, 6) + "[/center]"
+    )
+
     seasonal_heading = "[center][b]Series que estoy viendo de la temporada actual[/b][/center]"
-    seasonal = rows(seasonal_count, "seasonal-covers", "seasonal/go") if seasonal_count else "[center]No hay series en emisión en tu lista Watching.[/center]"
-    return completed + "\n\n" + seasonal_heading + "\n" + seasonal
+    if seasonal_count:
+        seasonal = (
+            "[center]" + image_row("seasonal-covers", "seasonal/go", 1, min(5, seasonal_count)) + "[/center]"
+        )
+        if seasonal_count > 5:
+            seasonal += (
+                "[center]" + image_row("seasonal-covers", "seasonal/go", 6, seasonal_count) + "[/center]"
+            )
+    else:
+        seasonal = "[center]No hay series en emisión en tu lista Watching.[/center]"
+
+    # Two columns: completed anime on the left (3x2), current season on the right (5x2).
+    return (
+        '[table border="0" cellspacing="0" cellpadding="0"]'
+        "[tr]"
+        "[td valign=\"top\"]" + completed + "[/td]"
+        "[td valign=\"top\"]" + seasonal_heading + seasonal + "[/td]"
+        "[/tr]"
+        "[/table]"
+    )
+
 
 def main():
     config = read_config()
