@@ -21,7 +21,7 @@ Location is approximate IP geolocation. Some fields may be blank or inaccurate, 
 
 1. Open Cloudflare Dashboard > Workers & Pages > `peco-mal-updater2`.
 2. Open Settings > Bindings and add an **Analytics Engine** binding:
-   - Variable name: `ANALYTICS`
+   - Variable name: `MAL_PROFILE_ANALYTICS`
    - Dataset name: `mal_profile_visits`
 3. Open Edit code and replace the Worker code with this file's contents:
    `cloudflare/peco-mal-updater2.js`
