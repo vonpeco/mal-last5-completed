@@ -1,5 +1,5 @@
 // Cloudflare Worker for Peco's MAL updater + privacy-conscious location test pixel.
-// Configure an Analytics Engine binding named ANALYTICS with dataset mal_profile_visits.
+// Configure an Analytics Engine binding named MAL_PROFILE_ANALYTICS with dataset mal_profile_visits.
 // This first test records aggregate request metadata only. It does NOT store IP addresses
 // or attempt to identify individual visitors. Recurrence will be added only after verifying
 // that MAL sends requests from visitors' browsers rather than an image proxy/cache.
@@ -39,7 +39,7 @@ export default {
       })();
 
       try {
-        env.ANALYTICS?.writeDataPoint({
+        env.MAL_PROFILE_ANALYTICS?.writeDataPoint({
           blobs: [
             cf.country || "unknown",
             cf.region || "unknown",
