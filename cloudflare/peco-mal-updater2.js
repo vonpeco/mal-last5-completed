@@ -4,6 +4,52 @@
 // Dataset: mal_profile_visits
 // The pixel records approximate country/region/city and network metadata only.
 // It does not store raw IP addresses or fingerprint individual visitors.
+// Telegram alerts are best-effort and use a short isolate-local duplicate cooldown.
+
+const recentTelegramNotifications = new Map();
+
+function escapeHtml(value) {
+  return String(value || "unknown").replace(/[&<>]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[char]);
+}
+
+async function sendTelegramNotification(env, details) {
+  if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_CHAT_ID) return;
+
+  const dedupeKey = [details.country, details.region, details.city, details.organization, details.referer].join("|");
+  const now = Date.now();
+  const previous = recentTelegramNotifications.get(dedupeKey) || 0;
+  if (now - previous < 120000) return;
+  recentTelegramNotifications.set(dedupeKey, now);
+  for (const [key, timestamp] of recentTelegramNotifications) {
+    if (now - timestamp > 120000) recentTelegramNotifications.delete(key);
+  }
+
+  const time = new Intl.DateTimeFormat("es-AR", {
+    timeZone: "America/Argentina/Buenos_Aires",
+    dateStyle: "short",
+    timeStyle: "medium"
+  }).format(new Date(now));
+  const message = [
+    "<b>Nueva solicitud al píxel del perfil MAL</b>",
+    "País: " + escapeHtml(details.country),
+    "Provincia/región: " + escapeHtml(details.region),
+    "Ciudad: " + escapeHtml(details.city),
+    "Red: " + escapeHtml(details.organization),
+    "Origen: " + escapeHtml(details.referer),
+    "Hora (Argentina): " + escapeHtml(time),
+    "<i>Es una solicitud al píxel; no confirma por sí sola una visita humana.</i>"
+  ].join("\\n");
+
+  try {
+    await fetch("https://api.telegram.org/bot" + env.TELEGRAM_BOT_TOKEN + "/sendMessage", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: env.TELEGRAM_CHAT_ID, text: message, parse_mode: "HTML", disable_web_page_preview: true })
+    });
+  } catch (error) {
+    // Notification failures must not prevent analytics or pixel delivery.
+  }
+}
 
 const TRANSPARENT_GIF = new Uint8Array([
   0x47, 0x49, 0x46, 0x38, 0x39, 0x61,
@@ -16,7 +62,7 @@ const TRANSPARENT_GIF = new Uint8Array([
 ]);
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const origin = request.headers.get("Origin") || "*";
     const corsHeaders = {
@@ -55,6 +101,16 @@ export default {
         }
       } catch (error) {
         // Analytics failures must not prevent the pixel from loading.
+      }
+
+      if (ctx && typeof ctx.waitUntil === "function") {
+        ctx.waitUntil(sendTelegramNotification(env, {
+          country: cf.country || "unknown",
+          region: cf.region || "unknown",
+          city: cf.city || "unknown",
+          organization: cf.asOrganization || "unknown",
+          referer: refererHost
+        }));
       }
 
       return new Response(TRANSPARENT_GIF, {
