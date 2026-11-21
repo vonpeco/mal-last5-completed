@@ -74,6 +74,48 @@ export default {
 
     if (request.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
+    // External stylesheet endpoint: logs a browser request without relying on an image pixel.
+    if (request.method === "GET" && url.pathname === "/tracker.css") {
+      const cf = request.cf || {};
+      const referer = request.headers.get("Referer") || "";
+      let refererHost = "none";
+      try {
+        if (referer) refererHost = new URL(referer).hostname;
+      } catch {
+        refererHost = "unavailable";
+      }
+
+      try {
+        if (env.ANALYTICS) {
+          env.ANALYTICS.writeDataPoint({
+            blobs: [
+              cf.country || "unknown",
+              cf.region || "unknown",
+              cf.city || "unknown",
+              cf.asOrganization || "unknown",
+              refererHost
+            ],
+            doubles: [1],
+            indexes: ["mal-profile-css"]
+          });
+        }
+      } catch (error) {
+        // Analytics failures must not prevent the stylesheet from loading.
+      }
+
+      return new Response("/* Peco MAL profile stylesheet check */\\n:root { --peco-tracker-loaded: 1; }", {
+        status: 200,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "text/css; charset=utf-8",
+          "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+          "Pragma": "no-cache",
+          "Expires": "0",
+          "X-Content-Type-Options": "nosniff"
+        }
+      });
+    }
+
     // Transparent 1x1 pixel endpoint for aggregate location analytics.
     if (request.method === "GET" && url.pathname === "/pixel.gif") {
       const cf = request.cf || {};
